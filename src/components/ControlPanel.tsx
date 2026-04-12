@@ -65,11 +65,26 @@ export function ControlPanel({
   const [selectedSpeciesId, setSelectedSpeciesId] = useState(reaction.species[0]?.id ?? '')
   const [amountDraft, setAmountDraft] = useState(0.3)
   const [initialDrafts, setInitialDrafts] = useState<ConcentrationMap>(initialConcentrations)
+  const [initialError, setInitialError] = useState('')
 
   const currentSpecies = useMemo(
     () => reaction.species.find((species) => species.id === selectedSpeciesId),
     [reaction.species, selectedSpeciesId],
   )
+  const hasAnyInitialConcentration = useMemo(
+    () => Object.values(initialDrafts).some((value) => value > 0),
+    [initialDrafts],
+  )
+
+  const handleRestartWithInitials = () => {
+    if (!hasAnyInitialConcentration) {
+      setInitialError(ui.initialValidationError)
+      return
+    }
+
+    setInitialError('')
+    onRestartWithInitials(initialDrafts)
+  }
 
   return (
     <section className="control-panel panel">
@@ -165,10 +180,13 @@ export function ControlPanel({
                 className="number-input"
                 min="0"
                 onChange={(event) =>
-                  setInitialDrafts((previous) => ({
-                    ...previous,
-                    [species.id]: Math.max(0, Number(event.target.value) || 0),
-                  }))
+                  {
+                    setInitialError('')
+                    setInitialDrafts((previous) => ({
+                      ...previous,
+                      [species.id]: Math.max(0, Number(event.target.value) || 0),
+                    }))
+                  }
                 }
                 step="0.1"
                 type="number"
@@ -184,7 +202,7 @@ export function ControlPanel({
         <div className="button-row">
           <button
             className="button-primary"
-            onClick={() => onRestartWithInitials(initialDrafts)}
+            onClick={handleRestartWithInitials}
             type="button"
           >
             {ui.restartWithDraft}
@@ -193,6 +211,11 @@ export function ControlPanel({
             {ui.resetSimulation}
           </button>
         </div>
+        {initialError ? (
+          <p aria-live="polite" className="error-note">
+            {initialError}
+          </p>
+        ) : null}
       </div>
 
       <div className="control-section">

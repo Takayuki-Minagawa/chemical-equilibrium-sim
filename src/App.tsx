@@ -49,12 +49,28 @@ const DEFAULT_SPEED: SpeedOption = 1
 const LANGUAGE_KEY = 'chemical-equilibrium-language'
 const THEME_KEY = 'chemical-equilibrium-theme'
 
+function getSafeStorageItem(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function setSafeStorageItem(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    // Ignore storage write failures such as private browsing restrictions.
+  }
+}
+
 function readLanguagePreference(): Language {
   if (typeof window === 'undefined') {
     return 'ja'
   }
 
-  const stored = window.localStorage.getItem(LANGUAGE_KEY)
+  const stored = getSafeStorageItem(LANGUAGE_KEY)
   return stored === 'en' ? 'en' : 'ja'
 }
 
@@ -63,7 +79,7 @@ function readThemePreference(): Theme {
     return 'dark'
   }
 
-  const stored = window.localStorage.getItem(THEME_KEY)
+  const stored = getSafeStorageItem(THEME_KEY)
   if (stored === 'light' || stored === 'dark') {
     return stored
   }
@@ -135,7 +151,7 @@ function App() {
     createRuntimeState(reactions[0], DEFAULT_SPEED),
   )
 
-  const reaction = reactionLookup[runtime.reactionId]
+  const reaction = reactionLookup[runtime.reactionId] ?? reactions[0]
   const ui = uiText[language]
   const latestEvent = runtime.events[runtime.events.length - 1]
   const eventIdRef = useRef(1)
@@ -170,11 +186,11 @@ function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
-    window.localStorage.setItem(THEME_KEY, theme)
+    setSafeStorageItem(THEME_KEY, theme)
   }, [theme])
 
   useEffect(() => {
-    window.localStorage.setItem(LANGUAGE_KEY, language)
+    setSafeStorageItem(LANGUAGE_KEY, language)
   }, [language])
 
   useEffect(() => {
@@ -203,7 +219,7 @@ function App() {
             return previous
           }
 
-          const currentReaction = reactionLookup[previous.reactionId]
+          const currentReaction = reactionLookup[previous.reactionId] ?? reactions[0]
           const simulatedSpan = batchedRealTime * previous.speed
           const stepCount = Math.max(1, Math.ceil(simulatedSpan / 0.02))
           const dt = simulatedSpan / stepCount
@@ -269,7 +285,7 @@ function App() {
     nextPartial: Partial<RuntimeState>,
     event: SimulationEvent,
   ): RuntimeState => {
-    const currentReaction = reactionLookup[previous.reactionId]
+    const currentReaction = reactionLookup[previous.reactionId] ?? reactions[0]
     const nextState: RuntimeState = {
       ...previous,
       ...nextPartial,
@@ -306,8 +322,9 @@ function App() {
     setPanelVersion((previous) => previous + 1)
     setRuntime((previous) => {
       const currentReaction = reactionLookup[previous.reactionId]
+      const safeReaction = currentReaction ?? reactions[0]
       return createRuntimeState(
-        currentReaction,
+        safeReaction,
         previous.speed,
         initialOverrides ?? previous.initialConcentrations,
       )
@@ -317,7 +334,7 @@ function App() {
   const updateTemperature = (nextTemperature: number) => {
     resetAccumulators()
     setRuntime((previous) => {
-      const currentReaction = reactionLookup[previous.reactionId]
+      const currentReaction = reactionLookup[previous.reactionId] ?? reactions[0]
       const clampedTemperature = Math.min(
         currentReaction.temperatureRange[1],
         Math.max(currentReaction.temperatureRange[0], nextTemperature),
@@ -345,7 +362,7 @@ function App() {
   const updateVolume = (nextVolume: number) => {
     resetAccumulators()
     setRuntime((previous) => {
-      const currentReaction = reactionLookup[previous.reactionId]
+      const currentReaction = reactionLookup[previous.reactionId] ?? reactions[0]
       const clampedVolume = Math.min(
         currentReaction.volumeRange[1],
         Math.max(currentReaction.volumeRange[0], nextVolume),

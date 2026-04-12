@@ -67,6 +67,14 @@ button {
   cursor: pointer;
 }
 
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -179,6 +187,11 @@ button {
 .quiz-card p {
   margin: 0;
   color: var(--muted);
+}
+
+.error-note {
+  margin: 12px 0 0;
+  color: #b45309;
 }
 
 .control-section {
@@ -380,9 +393,27 @@ button {
     rgba(5, 22, 27, 0.08);
 }
 
+.vessel-stage[data-canvas-status='unsupported'] .vessel-canvas {
+  display: none;
+}
+
 .vessel-canvas {
   width: 100%;
   height: 320px;
+  display: block;
+}
+
+.canvas-fallback {
+  display: none;
+  margin: 0;
+  position: absolute;
+  inset: 50% 24px auto;
+  transform: translateY(-50%);
+  text-align: center;
+  color: var(--text);
+}
+
+.vessel-stage[data-canvas-status='unsupported'] .canvas-fallback {
   display: block;
 }
 
@@ -499,6 +530,18 @@ button {
 
 .answer-state.is-incorrect {
   color: #c05a34;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 html[data-theme='dark'] .answer-state.is-correct {

@@ -97,6 +97,11 @@ export const uiText = {
       '発熱反応では加熱すると反応熱を打ち消す向き、つまり反応物側が有利になります。',
     noteTemperatureEndothermic:
       '吸熱反応では加熱すると熱を取り込む向き、つまり生成物側が有利になります。',
+    initialValidationError:
+      '少なくとも 1 つの化学種に 0 より大きい初期濃度を設定してください。',
+    canvasFallback:
+      'このブラウザでは粒子アニメーションを表示できません。下の凡例とグラフで状態を確認してください。',
+    particleSummaryPrefix: '粒子の近似数',
   },
   en: {
     heroKicker: 'Equilibrium Lab',
@@ -188,6 +193,11 @@ export const uiText = {
       'For an exothermic reaction, heating favours the side that absorbs heat, so the reactant side becomes more favourable.',
     noteTemperatureEndothermic:
       'For an endothermic reaction, heating favours the side that absorbs heat, so the product side becomes more favourable.',
+    initialValidationError:
+      'Set at least one initial concentration above zero before restarting the simulation.',
+    canvasFallback:
+      'This browser cannot render the particle animation. Use the legend and graph below to inspect the state instead.',
+    particleSummaryPrefix: 'Approximate particle counts',
   },
 } as const
 

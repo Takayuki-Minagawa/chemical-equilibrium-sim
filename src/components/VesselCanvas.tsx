@@ -45,9 +45,16 @@ export function VesselCanvas({
 }: VesselCanvasProps) {
   const ui = uiText[language]
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const stageRef = useRef<HTMLDivElement | null>(null)
   const particleIdRef = useRef(1)
   const particlesRef = useRef<Particle[]>([])
   const flashesRef = useRef<Flash[]>([])
+  const isCanvasSupportedRef = useRef(true)
+  const sizeRef = useRef({
+    dpr: 1,
+    height: 320,
+    width: 320,
+  })
   const lastEventId = lastEvent?.id
 
   const targetCounts = useMemo(() => {
@@ -72,6 +79,10 @@ export function VesselCanvas({
     ((volume - reaction.volumeRange[0]) /
       (reaction.volumeRange[1] - reaction.volumeRange[0] || 1)) *
       0.42
+
+  const particleSummary = `${ui.particleSummaryPrefix}: ${reaction.species
+    .map((species) => `${species.formula} ${targetCounts[species.id] ?? 0}`)
+    .join(', ')}`
 
   useEffect(() => {
     const nextParticles: Particle[] = []
@@ -139,13 +150,55 @@ export function VesselCanvas({
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) {
+    const stage = stageRef.current
+    if (!canvas || !stage) {
       return undefined
     }
 
     const context = canvas.getContext('2d')
     if (!context) {
+      isCanvasSupportedRef.current = false
+      stage.dataset.canvasStatus = 'unsupported'
+      console.error('Failed to get 2D canvas context for VesselCanvas')
       return undefined
+    }
+
+    isCanvasSupportedRef.current = true
+    stage.dataset.canvasStatus = 'ready'
+
+    const updateCanvasSize = (width: number, height: number) => {
+      const dpr = window.devicePixelRatio || 1
+      const normalizedWidth = Math.max(width, 320)
+      const normalizedHeight = Math.max(height, 280)
+
+      sizeRef.current = {
+        dpr,
+        height: normalizedHeight,
+        width: normalizedWidth,
+      }
+
+      canvas.width = Math.floor(normalizedWidth * dpr)
+      canvas.height = Math.floor(normalizedHeight * dpr)
+    }
+
+    updateCanvasSize(stage.clientWidth, stage.clientHeight)
+
+    const ResizeObserverConstructor = window.ResizeObserver
+    const handleWindowResize = () => {
+      updateCanvasSize(stage.clientWidth, stage.clientHeight)
+    }
+    const observer = ResizeObserverConstructor
+      ? new ResizeObserverConstructor((entries) => {
+          for (const entry of entries) {
+            updateCanvasSize(entry.contentRect.width, entry.contentRect.height)
+          }
+        })
+      : null
+
+    if (observer) {
+      observer.observe(stage)
+    } else {
+      window.addEventListener('resize', handleWindowResize)
     }
 
     let frameId = 0
@@ -158,19 +211,7 @@ export function VesselCanvas({
 
       const dt = Math.min((timestamp - previousTimestamp) / 1000, 0.05)
       previousTimestamp = timestamp
-
-      const bounds = canvas.getBoundingClientRect()
-      const width = Math.max(bounds.width, 320)
-      const height = Math.max(bounds.height, 280)
-      const dpr = window.devicePixelRatio || 1
-
-      if (
-        canvas.width !== Math.floor(width * dpr) ||
-        canvas.height !== Math.floor(height * dpr)
-      ) {
-        canvas.width = Math.floor(width * dpr)
-        canvas.height = Math.floor(height * dpr)
-      }
+      const { dpr, height, width } = sizeRef.current
 
       context.setTransform(dpr, 0, 0, dpr, 0, 0)
       context.clearRect(0, 0, width, height)
@@ -256,6 +297,8 @@ export function VesselCanvas({
     frameId = window.requestAnimationFrame(render)
 
     return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', handleWindowResize)
       window.cancelAnimationFrame(frameId)
     }
   }, [containerRatio, reaction.species])
@@ -268,8 +311,19 @@ export function VesselCanvas({
         <p>{ui.vesselSubtitle}</p>
       </div>
 
-      <div className="vessel-stage">
-        <canvas className="vessel-canvas" ref={canvasRef} />
+      <div className="vessel-stage" data-canvas-status="ready" ref={stageRef}>
+        <canvas
+          aria-label={particleSummary}
+          className="vessel-canvas"
+          ref={canvasRef}
+          role="img"
+        />
+        <p className="canvas-fallback" role="status">
+          {ui.canvasFallback}
+        </p>
+        <div aria-atomic="true" aria-live="polite" className="sr-only">
+          {particleSummary}
+        </div>
         <div className="vessel-overlay">
           <span className="vessel-badge">
             {ui.vesselTemp}: {temperature} K
