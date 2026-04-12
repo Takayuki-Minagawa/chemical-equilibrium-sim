@@ -2,6 +2,11 @@
 
 高校化学の「化学平衡」と「ルシャトリエの原理」を、粒子アニメーションと濃度-時間グラフで同時に観察するための静的 Web 教材です。
 
+## Demo
+
+- Live demo: https://takayuki-minagawa.github.io/chemical-equilibrium-sim/
+- Repository: https://github.com/Takayuki-Minagawa/chemical-equilibrium-sim
+
 ## Features
 
 - 4 種類の可逆反応プリセット
