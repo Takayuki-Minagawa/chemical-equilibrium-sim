@@ -596,6 +596,7 @@ function App() {
       <section className="visual-grid">
         <VesselCanvas
           concentrations={runtime.concentrations}
+          direction={snapshot.direction}
           equilibrium={snapshot.equilibrium}
           language={language}
           lastEvent={latestEvent}

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { formatNumber, getLocalizedText, uiText } from '../lib/copy'
+import { useEffect, useEffectEvent, useMemo, useReducer, useRef } from 'react'
+import { describeDirection, formatNumber, getLocalizedText, uiText } from '../lib/copy'
 import type {
   ConcentrationMap,
   Language,
+  ReactionDirection,
   ReactionDefinition,
   SimulationEvent,
 } from '../types'
@@ -12,6 +13,7 @@ interface VesselCanvasProps {
   equilibrium: ConcentrationMap
   language: Language
   lastEvent?: SimulationEvent
+  direction: ReactionDirection
   reaction: ReactionDefinition
   temperature: number
   volume: number
@@ -37,6 +39,7 @@ interface Flash {
 export function VesselCanvas({
   concentrations,
   equilibrium,
+  direction,
   language,
   lastEvent,
   reaction,
@@ -49,7 +52,6 @@ export function VesselCanvas({
   const particleIdRef = useRef(1)
   const particlesRef = useRef<Particle[]>([])
   const flashesRef = useRef<Flash[]>([])
-  const isCanvasSupportedRef = useRef(true)
   const sizeRef = useRef({
     dpr: 1,
     height: 320,
@@ -83,6 +85,14 @@ export function VesselCanvas({
   const particleSummary = `${ui.particleSummaryPrefix}: ${reaction.species
     .map((species) => `${species.formula} ${targetCounts[species.id] ?? 0}`)
     .join(', ')}`
+  const announcementPrefix = describeDirection(language, direction)
+  const [liveAnnouncement, announceParticleSummary] = useReducer(
+    (_previous: string, next: string) => next,
+    `${announcementPrefix}. ${particleSummary}`,
+  )
+  const getLiveAnnouncement = useEffectEvent(
+    () => `${announcementPrefix}. ${particleSummary}`,
+  )
 
   useEffect(() => {
     const nextParticles: Particle[] = []
@@ -149,6 +159,10 @@ export function VesselCanvas({
   }, [lastEventId])
 
   useEffect(() => {
+    announceParticleSummary(getLiveAnnouncement())
+  }, [announcementPrefix, lastEventId])
+
+  useEffect(() => {
     const canvas = canvasRef.current
     const stage = stageRef.current
     if (!canvas || !stage) {
@@ -157,13 +171,11 @@ export function VesselCanvas({
 
     const context = canvas.getContext('2d')
     if (!context) {
-      isCanvasSupportedRef.current = false
       stage.dataset.canvasStatus = 'unsupported'
       console.error('Failed to get 2D canvas context for VesselCanvas')
       return undefined
     }
 
-    isCanvasSupportedRef.current = true
     stage.dataset.canvasStatus = 'ready'
 
     const updateCanvasSize = (width: number, height: number) => {
@@ -322,7 +334,7 @@ export function VesselCanvas({
           {ui.canvasFallback}
         </p>
         <div aria-atomic="true" aria-live="polite" className="sr-only">
-          {particleSummary}
+          {liveAnnouncement}
         </div>
         <div className="vessel-overlay">
           <span className="vessel-badge">
