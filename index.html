@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -8,7 +8,21 @@
       name="description"
       content="Interactive simulator for chemical equilibrium and Le Chatelier's principle."
     />
-    <title>Chemical Equilibrium Simulator</title>
+    <meta name="theme-color" content="#f4f2ec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a1119" media="(prefers-color-scheme: dark)" />
+    <title>化学平衡ラボ | Chemical Equilibrium Simulator</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a light/dark flash.
+      try {
+        var theme = localStorage.getItem('chemical-equilibrium-theme')
+        if (theme !== 'light' && theme !== 'dark') {
+          theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        document.documentElement.dataset.theme = theme
+      } catch (error) {
+        // Storage can be unavailable (e.g. private mode); React applies the theme later.
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

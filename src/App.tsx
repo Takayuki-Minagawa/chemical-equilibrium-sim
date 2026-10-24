@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { AppHeader } from './components/AppHeader'
 import { ConcentrationGraph } from './components/ConcentrationGraph'
 import { ControlPanel } from './components/ControlPanel'
+import { Icon } from './components/Icon'
 import { LearningPanel } from './components/LearningPanel'
+import { MissionPanel } from './components/MissionPanel'
+import { PlaybackBar } from './components/PlaybackBar'
+import { ReactionBanner } from './components/ReactionBanner'
+import { ReactionPicker } from './components/ReactionPicker'
+import { StatusPanel } from './components/StatusPanel'
+import { ToastStack, type ToastMessage } from './components/ToastStack'
 import { VesselCanvas } from './components/VesselCanvas'
 import { reactionLookup, reactions } from './data/reactions'
 import {
@@ -12,13 +20,8 @@ import {
   limitList,
   stepConcentrations,
 } from './lib/equilibrium'
-import {
-  describeDirection,
-  describeEvent,
-  formatNumber,
-  getLocalizedText,
-  uiText,
-} from './lib/copy'
+import { getLocalizedText, uiText } from './lib/copy'
+import { missions, parseProgress, type MissionId, type ProgressState } from './lib/missions'
 import type {
   ConcentrationMap,
   HistoryPoint,
@@ -48,6 +51,8 @@ const MAX_EVENTS = 12
 const DEFAULT_SPEED: SpeedOption = 1
 const LANGUAGE_KEY = 'chemical-equilibrium-language'
 const THEME_KEY = 'chemical-equilibrium-theme'
+const PROGRESS_KEY = 'chemical-equilibrium-progress'
+const TOAST_DURATION_MS = 4200
 
 function getSafeStorageItem(key: string): string | null {
   try {
@@ -85,6 +90,40 @@ function readThemePreference(): Theme {
   }
 
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function readProgress(): ProgressState {
+  const storedValue = typeof window === 'undefined' ? null : getSafeStorageItem(PROGRESS_KEY)
+  return parseProgress(storedValue, reactions[0].id)
+}
+
+/**
+ * How far the system has travelled from the state right after the latest
+ * operation (or the start) toward equilibrium, measured on |ln(Q/K)|.
+ */
+function getApproachProgress(
+  history: HistoryPoint[],
+  latestEvent: SimulationEvent | undefined,
+  q: number,
+  k: number,
+): number {
+  const anchor =
+    (latestEvent
+      ? [...history].reverse().find((point) => point.time <= latestEvent.time + 1e-9)
+      : undefined) ?? history[0]
+
+  if (!anchor) {
+    return 1
+  }
+
+  const initialGap = Math.abs(Math.log(Math.max(anchor.q, 1e-12) / Math.max(anchor.k, 1e-12)))
+  const currentGap = Math.abs(Math.log(Math.max(q, 1e-12) / Math.max(k, 1e-12)))
+
+  if (initialGap < 0.04) {
+    return 1
+  }
+
+  return Math.max(0, Math.min(1, 1 - currentGap / initialGap))
 }
 
 function buildHistoryPoint(
@@ -147,6 +186,9 @@ function App() {
   const [language, setLanguage] = useState<Language>(readLanguagePreference)
   const [theme, setTheme] = useState<Theme>(readThemePreference)
   const [panelVersion, setPanelVersion] = useState(0)
+  const [progress, setProgress] = useState<ProgressState>(readProgress)
+  const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const toastIdRef = useRef(1)
   const [runtime, setRuntime] = useState<RuntimeState>(() =>
     createRuntimeState(reactions[0], DEFAULT_SPEED),
   )
@@ -191,7 +233,57 @@ function App() {
 
   useEffect(() => {
     setSafeStorageItem(LANGUAGE_KEY, language)
+    document.documentElement.lang = language
+    document.title =
+      language === 'ja'
+        ? '化学平衡ラボ | ルシャトリエの原理シミュレーター'
+        : "Equilibrium Lab | Le Chatelier's Principle Simulator"
   }, [language])
+
+  useEffect(() => {
+    setSafeStorageItem(PROGRESS_KEY, JSON.stringify(progress))
+  }, [progress])
+
+  const approach = useMemo(
+    () => getApproachProgress(runtime.history, latestEvent, snapshot.q, snapshot.k),
+    [latestEvent, runtime.history, snapshot.k, snapshot.q],
+  )
+
+  const pushToast = (toast: Omit<ToastMessage, 'id'>) => {
+    const id = toastIdRef.current
+    toastIdRef.current += 1
+    setToasts((previous) => [...previous.slice(-2), { ...toast, id }])
+    window.setTimeout(() => {
+      setToasts((previous) => previous.filter((entry) => entry.id !== id))
+    }, TOAST_DURATION_MS)
+  }
+
+  const completeMissions = (ids: MissionId[], visited?: string[]) => {
+    const newlyCompleted = ids.filter((id) => !progress.completed.includes(id))
+    const nextVisited = visited ?? progress.visited
+
+    if (newlyCompleted.length === 0 && nextVisited === progress.visited) {
+      return
+    }
+
+    const completed = [...progress.completed, ...newlyCompleted]
+    setProgress({ completed, visited: nextVisited })
+
+    newlyCompleted.forEach((id) => {
+      const mission = missions.find((entry) => entry.id === id)
+      if (mission) {
+        pushToast({
+          icon: 'trophy',
+          title: ui.missionUnlocked,
+          body: `${getLocalizedText(mission.title, language)} — ${getLocalizedText(mission.hint, language)}`,
+        })
+      }
+    })
+
+    if (newlyCompleted.length > 0 && completed.length === missions.length) {
+      pushToast({ icon: 'sparkle', title: ui.missionAllDone, body: ui.quizAllCorrect })
+    }
+  }
 
   useEffect(() => {
     if (!runtime.isRunning) {
@@ -315,6 +407,12 @@ function App() {
     resetAccumulators()
     setPanelVersion((previous) => previous + 1)
     setRuntime((previous) => createRuntimeState(nextReaction, previous.speed))
+
+    if (!progress.visited.includes(reactionId)) {
+      const visited = [...progress.visited, reactionId]
+      const allVisited = reactions.every((entry) => visited.includes(entry.id))
+      completeMissions(allVisited ? ['explorer'] : [], visited)
+    }
   }
 
   const restartSimulation = (initialOverrides?: ConcentrationMap) => {
@@ -332,6 +430,12 @@ function App() {
   }
 
   const updateTemperature = (nextTemperature: number) => {
+    if (nextTemperature > runtime.temperature) {
+      completeMissions(['heat'])
+    } else if (nextTemperature < runtime.temperature) {
+      completeMissions(['cool'])
+    }
+
     resetAccumulators()
     setRuntime((previous) => {
       const currentReaction = reactionLookup[previous.reactionId] ?? reactions[0]
@@ -360,6 +464,10 @@ function App() {
   }
 
   const updateVolume = (nextVolume: number) => {
+    if (reaction.pressureSensitive && nextVolume < runtime.volume) {
+      completeMissions(['compress'])
+    }
+
     resetAccumulators()
     setRuntime((previous) => {
       const currentReaction = reactionLookup[previous.reactionId] ?? reactions[0]
@@ -402,6 +510,10 @@ function App() {
   }
 
   const toggleCatalyst = () => {
+    if (!runtime.catalyst) {
+      completeMissions(['catalyst'])
+    }
+
     resetAccumulators()
     setRuntime((previous) => {
       const event: SimulationEvent = {
@@ -423,6 +535,10 @@ function App() {
     amount: number,
     type: 'inject' | 'remove',
   ) => {
+    if (type === 'inject' || (runtime.concentrations[speciesId] ?? 0) > 0) {
+      completeMissions([type])
+    }
+
     resetAccumulators()
     setRuntime((previous) => {
       const currentValue = previous.concentrations[speciesId] ?? 0
@@ -474,156 +590,159 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="hero-panel">
+      <a className="skip-link" href="#main">
+        {ui.skipToMain}
+      </a>
+
+      <AppHeader
+        completedMissions={progress.completed.length}
+        language={language}
+        onLanguageChange={setLanguage}
+        onThemeChange={setTheme}
+        theme={theme}
+        totalMissions={missions.length}
+      />
+
+      <section aria-labelledby="app-title" className="hero">
+        <div aria-hidden="true" className="hero-orbits">
+          {reaction.species.map((species, index) => (
+            <span
+              className={`hero-orb hero-orb-${index + 1}`}
+              key={species.id}
+              style={{ backgroundColor: species.color }}
+            />
+          ))}
+        </div>
         <div className="hero-copy">
           <p className="hero-kicker">{ui.heroKicker}</p>
-          <h1>{ui.appTitle}</h1>
-          <p>{ui.appSubtitle}</p>
-        </div>
-        <div className="hero-chip-row" aria-label={ui.reactionHighlights}>
-          <span className="hero-chip">{reaction.equation}</span>
-          <span className="hero-chip">{getLocalizedText(reaction.title, language)}</span>
-          <span className="hero-chip">{getLocalizedText(reaction.note, language)}</span>
-        </div>
-      </header>
-
-      <section className="top-grid">
-        <ControlPanel
-          catalyst={runtime.catalyst}
-          currentConcentrations={runtime.concentrations}
-          initialConcentrations={runtime.initialConcentrations}
-          isRunning={runtime.isRunning}
-          key={`${panelVersion}-${reaction.id}-${runtime.temperature}-${runtime.volume}-${Object.values(
-            runtime.initialConcentrations,
-          ).join(',')}`}
-          language={language}
-          onLanguageChange={setLanguage}
-          onReactionChange={changeReaction}
-          onResetSimulation={restartSimulation}
-          onRestartWithInitials={restartSimulation}
-          onSpeedChange={updateSpeed}
-          onSpeciesChange={changeSpeciesConcentration}
-          onTemperatureApply={updateTemperature}
-          onThemeChange={setTheme}
-          onToggleCatalyst={toggleCatalyst}
-          onTogglePlayback={togglePlayback}
-          onVolumeApply={updateVolume}
-          reaction={reaction}
-          reactions={reactions}
-          speed={runtime.speed}
-          temperature={runtime.temperature}
-          theme={theme}
-          volume={runtime.volume}
-        />
-
-        <aside className="status-panel panel">
-          <div className="panel-heading">
-            <p className="panel-kicker">{ui.statusKicker}</p>
-            <h2>{ui.statusTitle}</h2>
-            <p>{ui.statusSubtitle}</p>
-          </div>
-
-          <div className="status-grid">
-            <div className="stat-card">
-              <span className="stat-label">{ui.currentDirection}</span>
-              <strong className="stat-value">
-                {describeDirection(language, snapshot.direction)}
-              </strong>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">{ui.predictedShift}</span>
-              <strong className="stat-value">
-                {describeDirection(language, predictedShift)}
-              </strong>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">K</span>
-              <strong className="stat-value">{formatNumber(snapshot.k, language, 3)}</strong>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">Q</span>
-              <strong className="stat-value">{formatNumber(snapshot.q, language, 3)}</strong>
-            </div>
-          </div>
-
-          <div className="rate-balance">
-            <div>
-              <span>{ui.forwardRate}</span>
-              <strong>{formatNumber(snapshot.forwardRate, language, 3)}</strong>
-            </div>
-            <div>
-              <span>{ui.reverseRate}</span>
-              <strong>{formatNumber(snapshot.reverseRate, language, 3)}</strong>
-            </div>
-          </div>
-
-          <div className="species-value-list" aria-label={ui.currentConcentrations}>
-            {reaction.species.map((species) => (
-              <div className="species-value-item" key={species.id}>
-                <span className="species-swatch" style={{ backgroundColor: species.color }} />
-                <div>
-                  <strong>{species.formula}</strong>
-                  <small>{getLocalizedText(species.label, language)}</small>
-                </div>
-                <span>{formatNumber(runtime.concentrations[species.id] ?? 0, language, 2)} M</span>
-              </div>
+          <h1 id="app-title">{ui.appTitle}</h1>
+          <p className="hero-lead">{ui.appSubtitle}</p>
+          <ol aria-label={ui.stepsLabel} className="hero-steps">
+            {[ui.step1, ui.step2, ui.step3].map((step, index) => (
+              <li key={step}>
+                <span className="step-number">{index + 1}</span>
+                {step}
+              </li>
             ))}
-          </div>
-
-          <div className="event-list-block">
-            <h3>{ui.operationLog}</h3>
-            {runtime.events.length === 0 ? (
-              <p className="small-note">{ui.noEvents}</p>
-            ) : (
-              <ul className="event-list">
-                {[...runtime.events]
-                  .reverse()
-                  .slice(0, 5)
-                  .map((event) => (
-                    <li className="event-item" key={event.id}>
-                      <span className="mini-badge">
-                        t = {formatNumber(event.time, language, 1)}
-                      </span>
-                      <span>{describeEvent(event, reaction, language)}</span>
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </div>
-        </aside>
-      </section>
-
-      <section className="visual-grid">
-        <VesselCanvas
-          concentrations={runtime.concentrations}
-          direction={snapshot.direction}
-          equilibrium={snapshot.equilibrium}
+          </ol>
+        </div>
+        <ReactionPicker
+          activeId={reaction.id}
           language={language}
-          lastEvent={latestEvent}
-          reaction={reaction}
-          temperature={runtime.temperature}
-          volume={runtime.volume}
-        />
-        <ConcentrationGraph
-          events={runtime.events}
-          history={runtime.history}
-          language={language}
-          reaction={reaction}
-          snapshot={snapshot}
+          onSelect={changeReaction}
+          reactions={reactions}
+          visited={progress.visited}
         />
       </section>
 
-      <LearningPanel
-        catalyst={runtime.catalyst}
-        key={`${language}-${reaction.id}-${latestEvent?.id ?? 0}`}
-        language={language}
-        lastEvent={latestEvent}
-        predictedShift={predictedShift}
-        reaction={reaction}
-        snapshot={snapshot}
-        temperature={runtime.temperature}
-        volume={runtime.volume}
-      />
+      <main className="lab-grid" id="main" tabIndex={-1}>
+        <div className="area-banner">
+          <ReactionBanner
+            approach={approach}
+            language={language}
+            reaction={reaction}
+            snapshot={snapshot}
+          />
+        </div>
+
+        <div className="area-vessel">
+          <VesselCanvas
+            catalyst={runtime.catalyst}
+            concentrations={runtime.concentrations}
+            direction={snapshot.direction}
+            isRunning={runtime.isRunning}
+            language={language}
+            lastEvent={latestEvent}
+            reaction={reaction}
+            temperature={runtime.temperature}
+            theme={theme}
+            toolbar={
+              <PlaybackBar
+                isRunning={runtime.isRunning}
+                language={language}
+                onReset={() => restartSimulation()}
+                onSpeedChange={updateSpeed}
+                onTogglePlayback={togglePlayback}
+                speed={runtime.speed}
+                time={runtime.time}
+              />
+            }
+            volume={runtime.volume}
+          />
+        </div>
+
+        <div className="area-controls">
+          <ControlPanel
+            catalyst={runtime.catalyst}
+            currentConcentrations={runtime.concentrations}
+            initialConcentrations={runtime.initialConcentrations}
+            key={`${panelVersion}-${reaction.id}`}
+            language={language}
+            onRestartWithInitials={restartSimulation}
+            onSpeciesChange={changeSpeciesConcentration}
+            onTemperatureApply={updateTemperature}
+            onToggleCatalyst={toggleCatalyst}
+            onVolumeApply={updateVolume}
+            reaction={reaction}
+            temperature={runtime.temperature}
+            volume={runtime.volume}
+          />
+        </div>
+
+        <div className="area-graph">
+          <ConcentrationGraph
+            events={runtime.events}
+            history={runtime.history}
+            language={language}
+            reaction={reaction}
+            snapshot={snapshot}
+          />
+        </div>
+
+        <div className="area-status">
+          <StatusPanel
+            concentrations={runtime.concentrations}
+            equilibrium={snapshot.equilibrium}
+            events={runtime.events}
+            language={language}
+            latestEvent={latestEvent}
+            predictedShift={predictedShift}
+            reaction={reaction}
+          />
+        </div>
+
+        <div className="area-learning">
+          <LearningPanel
+            catalyst={runtime.catalyst}
+            key={`${language}-${reaction.id}-${latestEvent?.id ?? 0}`}
+            language={language}
+            lastEvent={latestEvent}
+            onQuizComplete={() => completeMissions(['quiz'])}
+            predictedShift={predictedShift}
+            reaction={reaction}
+            snapshot={snapshot}
+            temperature={runtime.temperature}
+            volume={runtime.volume}
+          />
+        </div>
+
+        <div className="area-missions">
+          <MissionPanel
+            completed={progress.completed}
+            language={language}
+            onReset={() => setProgress({ completed: [], visited: [reaction.id] })}
+            totalReactions={reactions.length}
+            visitedCount={progress.visited.length}
+          />
+        </div>
+      </main>
+
+      <footer className="app-footer">
+        <Icon name="atom" size={16} />
+        <span>{ui.appTitle}</span>
+      </footer>
+
+      <ToastStack toasts={toasts} />
     </div>
   )
 }
