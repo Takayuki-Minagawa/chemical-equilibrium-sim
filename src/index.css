@@ -840,6 +840,23 @@ html[data-theme='dark'] .hero-orb {
   }
 }
 
+/* Laptop widths: keep the controls beside the vessel, stack vessel and graph. */
+@media (min-width: 1100px) and (max-width: 1359px) {
+  .lab-grid {
+    grid-template-columns: 340px minmax(0, 1fr);
+    grid-template-areas:
+      'controls banner'
+      'controls vessel'
+      'controls graph'
+      'status status'
+      'missions learning';
+  }
+
+  .area-missions {
+    align-self: start;
+  }
+}
+
 @media (min-width: 1360px) {
   .lab-grid {
     grid-template-columns: 360px repeat(2, minmax(0, 1fr));
