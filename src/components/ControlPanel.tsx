@@ -20,6 +20,11 @@ interface ControlPanelProps {
 }
 
 const VOLUME_STEP = 0.1
+const LIMIT_TOLERANCE = 1e-3
+
+function roundVolume(value: number): number {
+  return Math.round(value * 100) / 100
+}
 
 function getTemperatureStep(reaction: ReactionDefinition): number {
   const span = reaction.temperatureRange[1] - reaction.temperatureRange[0]
@@ -47,15 +52,17 @@ export function ControlPanel({
   const ui = uiText[language]
   const [temperatureDraft, setTemperatureDraft] = useState(temperature)
   const [volumeDraft, setVolumeDraft] = useState(volume)
-  const [syncedConditions, setSyncedConditions] = useState({ temperature, volume })
+  const [syncedTemperature, setSyncedTemperature] = useState(temperature)
+  const [syncedVolume, setSyncedVolume] = useState(volume)
 
-  // Reset the slider drafts whenever an applied value changes (e.g. quick heat/compress).
-  if (
-    syncedConditions.temperature !== temperature ||
-    syncedConditions.volume !== volume
-  ) {
-    setSyncedConditions({ temperature, volume })
+  // Reset a slider draft whenever its applied value changes (e.g. quick heat/compress),
+  // leaving the other slider's unsaved draft alone.
+  if (syncedTemperature !== temperature) {
+    setSyncedTemperature(temperature)
     setTemperatureDraft(temperature)
+  }
+  if (syncedVolume !== volume) {
+    setSyncedVolume(volume)
     setVolumeDraft(volume)
   }
   const [amountDraft, setAmountDraft] = useState(0.3)
@@ -69,8 +76,12 @@ export function ControlPanel({
   const temperatureStep = getTemperatureStep(reaction)
   const [minTemperature, maxTemperature] = reaction.temperatureRange
   const [minVolume, maxVolume] = reaction.volumeRange
-  const temperatureDirty = Math.abs(temperatureDraft - temperature) > 0.001
-  const volumeDirty = Math.abs(volumeDraft - volume) > 0.001
+  const temperatureDirty = Math.abs(temperatureDraft - temperature) > LIMIT_TOLERANCE
+  const volumeDirty = Math.abs(volumeDraft - volume) > LIMIT_TOLERANCE
+  const atMinTemperature = temperature - minTemperature < LIMIT_TOLERANCE
+  const atMaxTemperature = maxTemperature - temperature < LIMIT_TOLERANCE
+  const atMinVolume = volume - minVolume < LIMIT_TOLERANCE
+  const atMaxVolume = maxVolume - volume < LIMIT_TOLERANCE
   const heatLevel = (temperature - minTemperature) / (maxTemperature - minTemperature || 1)
 
   const handleRestartWithInitials = () => {
@@ -139,9 +150,13 @@ export function ControlPanel({
                 <span className="species-op-buttons">
                   <button
                     aria-label={`${name}: ${ui.remove} ${formatNumber(amountDraft, language, 2)} M`}
+                    aria-disabled={current <= 0.0001}
                     className="round-button"
-                    disabled={current <= 0.0001}
-                    onClick={() => onSpeciesChange(species.id, amountDraft, 'remove')}
+                    onClick={() => {
+                      if (current > 0.0001) {
+                        onSpeciesChange(species.id, amountDraft, 'remove')
+                      }
+                    }}
                     title={ui.remove}
                     type="button"
                   >
@@ -197,26 +212,38 @@ export function ControlPanel({
         </label>
         <div className="lever-actions">
           <button
+            aria-disabled={atMinTemperature}
             className="chip-button tone-cool"
-            disabled={temperature <= minTemperature}
-            onClick={() => onTemperatureApply(temperature - temperatureStep)}
+            onClick={() => {
+              if (!atMinTemperature) {
+                onTemperatureApply(temperature - temperatureStep)
+              }
+            }}
             type="button"
           >
             <Icon name="snowflake" size={15} />
             {ui.cool} −{temperatureStep}
           </button>
           <button
+            aria-disabled={!temperatureDirty}
             className={`button-apply ${temperatureDirty ? 'is-dirty' : ''}`}
-            disabled={!temperatureDirty}
-            onClick={() => onTemperatureApply(temperatureDraft)}
+            onClick={() => {
+              if (temperatureDirty) {
+                onTemperatureApply(temperatureDraft)
+              }
+            }}
             type="button"
           >
             {ui.apply}
           </button>
           <button
+            aria-disabled={atMaxTemperature}
             className="chip-button tone-heat"
-            disabled={temperature >= maxTemperature}
-            onClick={() => onTemperatureApply(temperature + temperatureStep)}
+            onClick={() => {
+              if (!atMaxTemperature) {
+                onTemperatureApply(temperature + temperatureStep)
+              }
+            }}
             type="button"
           >
             <Icon name="flame" size={15} />
@@ -256,26 +283,38 @@ export function ControlPanel({
         {reaction.pressureSensitive ? (
           <div className="lever-actions">
             <button
+              aria-disabled={atMinVolume}
               className="chip-button"
-              disabled={volume <= minVolume}
-              onClick={() => onVolumeApply(Math.max(minVolume, volume - VOLUME_STEP))}
+              onClick={() => {
+                if (!atMinVolume) {
+                  onVolumeApply(Math.max(minVolume, roundVolume(volume - VOLUME_STEP)))
+                }
+              }}
               type="button"
             >
               <Icon name="compress" size={15} />
               {ui.compress}
             </button>
             <button
+              aria-disabled={!volumeDirty}
               className={`button-apply ${volumeDirty ? 'is-dirty' : ''}`}
-              disabled={!volumeDirty}
-              onClick={() => onVolumeApply(volumeDraft)}
+              onClick={() => {
+                if (volumeDirty) {
+                  onVolumeApply(volumeDraft)
+                }
+              }}
               type="button"
             >
               {ui.apply}
             </button>
             <button
+              aria-disabled={atMaxVolume}
               className="chip-button"
-              disabled={volume >= maxVolume}
-              onClick={() => onVolumeApply(Math.min(maxVolume, volume + VOLUME_STEP))}
+              onClick={() => {
+                if (!atMaxVolume) {
+                  onVolumeApply(Math.min(maxVolume, roundVolume(volume + VOLUME_STEP)))
+                }
+              }}
               type="button"
             >
               <Icon name="expand" size={15} />
@@ -350,11 +389,9 @@ export function ControlPanel({
           <Icon name="reset" size={16} />
           {ui.restartWithDraft}
         </button>
-        {initialError ? (
-          <p aria-live="polite" className="error-note">
-            {initialError}
-          </p>
-        ) : null}
+        <p aria-live="polite" className="error-note">
+          {initialError}
+        </p>
       </details>
     </section>
   )

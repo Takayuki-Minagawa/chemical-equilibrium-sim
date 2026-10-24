@@ -27,9 +27,10 @@ export function ConcentrationGraph({
 }: ConcentrationGraphProps) {
   const ui = uiText[language]
   const gradientPrefix = `graph-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
-  const width = 640
-  const height = 330
-  const padding = { top: 30, right: 22, bottom: 38, left: 52 }
+  // A compact viewBox keeps labels legible when the graph shares a row with the vessel.
+  const width = 520
+  const height = 300
+  const padding = { top: 30, right: 18, bottom: 36, left: 48 }
   const minTime = history[0]?.time ?? 0
   const maxTime = history[history.length - 1]?.time ?? minTime + 1
   const timeSpan = Math.max(1, maxTime - minTime)
@@ -179,7 +180,10 @@ export function ConcentrationGraph({
                   y2={plotBottom}
                 />
                 <circle className="graph-event-dot" cx={x} cy={padding.top} r={4} />
-                <text className="graph-event-label" x={x + 6} y={padding.top + 10}>
+                <text
+                  className="graph-event-label"
+                  transform={`translate(${x + 5} ${padding.top + 10}) rotate(90)`}
+                >
                   {toSubscriptText(describeEvent(event, reaction, language, true))}
                 </text>
               </g>

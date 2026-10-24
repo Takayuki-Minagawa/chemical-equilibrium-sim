@@ -37,4 +37,10 @@ describe('mission progress parsing', () => {
 
     expect(parsed).toEqual({ completed: ['heat'], visited: ['a', 'b'] })
   })
+
+  it('ignores visited reaction ids that no longer exist', () => {
+    const parsed = parseProgress(JSON.stringify({ visited: ['a', 'removed'] }), 'a', ['a', 'b'])
+
+    expect(parsed.visited).toEqual(['a'])
+  })
 })

@@ -90,7 +90,11 @@ export const missions: MissionDefinition[] = [
 
 const missionIds = new Set<string>(missions.map((mission) => mission.id))
 
-export function parseProgress(raw: string | null, initialReactionId: string): ProgressState {
+export function parseProgress(
+  raw: string | null,
+  initialReactionId: string,
+  knownReactionIds?: string[],
+): ProgressState {
   const fallback: ProgressState = { completed: [], visited: [initialReactionId] }
   if (!raw) {
     return fallback
@@ -109,7 +113,10 @@ export function parseProgress(raw: string | null, initialReactionId: string): Pr
         )
       : []
     const safeVisited = Array.isArray(visited)
-      ? visited.filter((entry): entry is string => typeof entry === 'string')
+      ? visited.filter(
+          (entry): entry is string =>
+            typeof entry === 'string' && (!knownReactionIds || knownReactionIds.includes(entry)),
+        )
       : []
 
     return {

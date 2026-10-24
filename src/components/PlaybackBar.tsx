@@ -26,7 +26,7 @@ export function PlaybackBar({
   const ui = uiText[language]
 
   return (
-    <div aria-label={ui.playbackLabel} className="playback-bar" role="toolbar">
+    <div aria-label={ui.playbackLabel} className="playback-bar" role="group">
       <button
         className={`play-button ${isRunning ? 'is-running' : ''}`}
         onClick={onTogglePlayback}

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { describeDirection, describeEvent, uiText } from '../lib/copy'
 import { getPredictedShift } from '../lib/equilibrium'
 import { KFraction } from './Formula'
@@ -112,6 +112,8 @@ export function LearningPanel({
 }: LearningPanelProps) {
   const ui = uiText[language]
   const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [announcement, setAnnouncement] = useState('')
+  const quizCompletedRef = useRef(false)
 
   const quizItems = useMemo(
     () => buildQuizItems(language, reaction, lastEvent, snapshot.direction),
@@ -120,12 +122,26 @@ export function LearningPanel({
   const correctCount = quizItems.filter((item) => answers[item.id] === item.correct).length
   const allCorrect = correctCount === quizItems.length
 
+  // Q1's correct answer can follow the live direction, so the quiz may become
+  // all-correct without a click; award the mission whenever that happens.
+  useEffect(() => {
+    if (allCorrect && !quizCompletedRef.current) {
+      quizCompletedRef.current = true
+      onQuizComplete()
+    }
+  }, [allCorrect, onQuizComplete])
+
   const handleAnswer = (itemId: string, optionId: string) => {
+    const item = quizItems.find((entry) => entry.id === itemId)
     const nextAnswers = { ...answers, [itemId]: optionId }
     setAnswers(nextAnswers)
 
-    if (quizItems.every((item) => nextAnswers[item.id] === item.correct)) {
-      onQuizComplete()
+    if (item) {
+      const isCorrect = optionId === item.correct
+      const solvedAll = quizItems.every((entry) => nextAnswers[entry.id] === entry.correct)
+      setAnnouncement(
+        `${isCorrect ? ui.quizCorrect : ui.quizIncorrect}: ${item.explanation}${solvedAll ? ` ${ui.quizAllCorrect}` : ''}`,
+      )
     }
   }
 
@@ -256,8 +272,11 @@ export function LearningPanel({
               return <span className={`quiz-progress-step ${state}`} key={item.id} />
             })}
           </div>
+          <p aria-live="polite" className="sr-only">
+            {announcement}
+          </p>
           {allCorrect ? (
-            <p aria-live="polite" className="quiz-celebration">
+            <p className="quiz-celebration">
               <Icon name="sparkle" size={18} />
               {ui.quizAllCorrect}
             </p>
@@ -296,10 +315,7 @@ export function LearningPanel({
                   })}
                 </div>
                 {selected ? (
-                  <p
-                    aria-live="polite"
-                    className={`answer-state ${correct ? 'is-correct' : 'is-incorrect'}`}
-                  >
+                  <p className={`answer-state ${correct ? 'is-correct' : 'is-incorrect'}`}>
                     <strong>{correct ? ui.quizCorrect : ui.quizIncorrect}</strong>
                     {' - '}
                     {item.explanation}

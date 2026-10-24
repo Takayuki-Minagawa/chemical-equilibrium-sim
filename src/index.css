@@ -27,8 +27,8 @@
   --success-soft: rgba(24, 121, 78, 0.12);
   --warn: #b45309;
   --warn-soft: rgba(180, 83, 9, 0.12);
-  --heat: #d9452b;
-  --cool: #2f6fd0;
+  --heat: #b8321a;
+  --cool: #2862c4;
   --accent: var(--forward);
   --on-accent: #ffffff;
   --shadow-sm: 0 1px 2px rgba(20, 36, 48, 0.05), 0 6px 18px rgba(20, 36, 48, 0.06);
@@ -455,6 +455,10 @@ html[data-theme='dark'] .segment.is-active {
   font-size: 0.86rem;
 }
 
+.error-note:empty {
+  margin: 0;
+}
+
 .error-note {
   margin: 10px 0 0;
   color: var(--warn);
@@ -745,7 +749,7 @@ html[data-theme='dark'] .hero-orb {
 
 .equation-plus,
 .equation-arrow {
-  color: var(--faint);
+  color: var(--muted);
   font-weight: 500;
 }
 
@@ -836,7 +840,7 @@ html[data-theme='dark'] .hero-orb {
   }
 }
 
-@media (min-width: 1240px) {
+@media (min-width: 1360px) {
   .lab-grid {
     grid-template-columns: 360px repeat(2, minmax(0, 1fr));
     grid-template-areas:
@@ -1570,11 +1574,11 @@ html[data-theme='dark'] .vessel-stage {
     border-color 160ms ease;
 }
 
-.round-button:not(:disabled):hover {
+.round-button:not([aria-disabled='true']):hover {
   transform: scale(1.08);
 }
 
-.round-button:not(:disabled):active {
+.round-button:not([aria-disabled='true']):active {
   transform: scale(0.92);
 }
 
@@ -1584,8 +1588,9 @@ html[data-theme='dark'] .vessel-stage {
   color: #13202a;
 }
 
-.round-button:disabled {
+.round-button[aria-disabled='true'] {
   opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Lever action buttons */
@@ -1605,7 +1610,7 @@ html[data-theme='dark'] .vessel-stage {
   white-space: nowrap;
 }
 
-.chip-button:not(:disabled):hover {
+.chip-button:not([aria-disabled='true']):hover {
   transform: translateY(-1px);
   border-color: var(--border-strong);
 }
@@ -1618,9 +1623,10 @@ html[data-theme='dark'] .vessel-stage {
   color: var(--cool);
 }
 
-.chip-button:disabled,
-.button-apply:disabled {
+.chip-button[aria-disabled='true'],
+.button-apply[aria-disabled='true'] {
   opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .button-apply {
@@ -1843,7 +1849,7 @@ html[data-theme='dark'] .vessel-stage {
 .graph-event-label {
   fill: var(--muted);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .graph-axis-title {
@@ -1854,7 +1860,6 @@ html[data-theme='dark'] .vessel-stage {
 .graph-event-label {
   fill: var(--balanced);
   font-weight: 700;
-  writing-mode: vertical-rl;
 }
 
 .graph-line {
@@ -2406,7 +2411,7 @@ html[data-theme='dark'] .vessel-stage {
   justify-content: center;
   gap: 8px;
   margin-top: 28px;
-  color: var(--faint);
+  color: var(--muted);
   font-size: 0.8rem;
 }
 
@@ -2691,10 +2696,6 @@ html[data-theme='dark'] .toast {
   .lever-actions .button-apply {
     grid-column: 1 / -1;
     grid-row: 2;
-  }
-
-  .lever-actions .button-apply:disabled {
-    display: none;
   }
 
   .toast-stack {

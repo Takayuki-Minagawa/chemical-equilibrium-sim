@@ -94,22 +94,28 @@ function readThemePreference(): Theme {
 
 function readProgress(): ProgressState {
   const storedValue = typeof window === 'undefined' ? null : getSafeStorageItem(PROGRESS_KEY)
-  return parseProgress(storedValue, reactions[0].id)
+  return parseProgress(
+    storedValue,
+    reactions[0].id,
+    reactions.map((reaction) => reaction.id),
+  )
 }
 
 /**
  * How far the system has travelled from the state right after the latest
- * operation (or the start) toward equilibrium, measured on |ln(Q/K)|.
+ * equilibrium-moving operation (or the start) toward equilibrium, measured on
+ * |ln(Q/K)|. Catalyst toggles are ignored because they leave Q and K unchanged.
  */
 function getApproachProgress(
   history: HistoryPoint[],
-  latestEvent: SimulationEvent | undefined,
+  events: SimulationEvent[],
   q: number,
   k: number,
 ): number {
+  const anchorEvent = [...events].reverse().find((event) => event.type !== 'catalyst')
   const anchor =
-    (latestEvent
-      ? [...history].reverse().find((point) => point.time <= latestEvent.time + 1e-9)
+    (anchorEvent
+      ? [...history].reverse().find((point) => point.time <= anchorEvent.time + 1e-9)
       : undefined) ?? history[0]
 
   if (!anchor) {
@@ -245,8 +251,8 @@ function App() {
   }, [progress])
 
   const approach = useMemo(
-    () => getApproachProgress(runtime.history, latestEvent, snapshot.q, snapshot.k),
-    [latestEvent, runtime.history, snapshot.k, snapshot.q],
+    () => getApproachProgress(runtime.history, runtime.events, snapshot.q, snapshot.k),
+    [runtime.events, runtime.history, snapshot.k, snapshot.q],
   )
 
   const pushToast = (toast: Omit<ToastMessage, 'id'>) => {
@@ -281,7 +287,7 @@ function App() {
     })
 
     if (newlyCompleted.length > 0 && completed.length === missions.length) {
-      pushToast({ icon: 'sparkle', title: ui.missionAllDone, body: ui.quizAllCorrect })
+      pushToast({ icon: 'sparkle', title: ui.missionAllDone, body: ui.missionAllDoneBody })
     }
   }
 
@@ -417,7 +423,11 @@ function App() {
 
   const restartSimulation = (initialOverrides?: ConcentrationMap) => {
     resetAccumulators()
-    setPanelVersion((previous) => previous + 1)
+    // A plain reset discards unsaved drafts; restarting with custom initials keeps
+    // the panel (and its open section and focus) because the drafts are already applied.
+    if (!initialOverrides) {
+      setPanelVersion((previous) => previous + 1)
+    }
     setRuntime((previous) => {
       const currentReaction = reactionLookup[previous.reactionId]
       const safeReaction = currentReaction ?? reactions[0]

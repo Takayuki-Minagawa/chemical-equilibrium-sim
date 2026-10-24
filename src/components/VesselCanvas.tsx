@@ -287,14 +287,18 @@ export function VesselCanvas({
 
     stage.dataset.canvasStatus = 'ready'
 
-    const reducedMotion =
-      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-    const motionScale = reducedMotion ? 0.35 : 1
+    const reducedMotionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    let reducedMotion = reducedMotionQuery?.matches ?? false
+    const handleMotionPreference = (event: MediaQueryListEvent) => {
+      reducedMotion = event.matches
+    }
+    reducedMotionQuery?.addEventListener?.('change', handleMotionPreference)
 
     const updateCanvasSize = (width: number, height: number) => {
       const dpr = window.devicePixelRatio || 1
-      const normalizedWidth = Math.max(width, 280)
-      const normalizedHeight = Math.max(height, 260)
+      // Use the real size so the drawing is never stretched on narrow phones.
+      const normalizedWidth = Math.max(width, 1)
+      const normalizedHeight = Math.max(height, 1)
 
       sizeRef.current = {
         dpr,
@@ -394,6 +398,7 @@ export function VesselCanvas({
       }
 
       const wallInset = scene.pistonVisible ? 8 : 2
+      const motionScale = reducedMotion ? 0.35 : 1
       const motionStep = scene.running ? dt * scene.speedFactor * motionScale : 0
 
       particlesRef.current.forEach((particle) => {
@@ -472,6 +477,7 @@ export function VesselCanvas({
 
     return () => {
       observer?.disconnect()
+      reducedMotionQuery?.removeEventListener?.('change', handleMotionPreference)
       window.removeEventListener('resize', handleWindowResize)
       window.cancelAnimationFrame(frameId)
     }
@@ -523,7 +529,7 @@ export function VesselCanvas({
           {!isRunning ? (
             <span className="vessel-badge is-paused">
               <Icon name="pause" size={14} />
-              {ui.pause}
+              {ui.paused}
             </span>
           ) : null}
         </div>
